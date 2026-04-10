@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir scroll_block:*)",
+      "Bash(dir:*)",
+      "Bash(chmod +x:*)",
+      "Bash(mkdir -p .git/hooks)",
+      "Bash(ln -sf ../.pre-commit.sh .git/hooks/pre-commit)",
+      "Bash(ln -sf ../.pre-push.sh .git/hooks/pre-push)",
+      "Bash(cp .pre-commit.sh .git/hooks/pre-commit)",
+      "Bash(cp .pre-push.sh .git/hooks/pre-push)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
