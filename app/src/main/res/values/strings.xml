@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Scroll Block</string>
+    <string name="overlay_title">Hey, are you paying attention?</string>
+    <string name="overlay_subtitle">You\'ve been scrolling quite a bit!</string>
+    <string name="overlay_dismiss">Got it</string>
+    <string name="accessibility_service_label">Scroll Block Detector</string>
+    <string name="accessibility_description">Detects idle scrolling to help you stay focused.</string>
 </resources>
