@@ -62,13 +62,35 @@ class IdleScrollAccessibilityService : AccessibilityService() {
         if (!isEnabled) return
 
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
-            handleScrollEvent()
+            handleScrollEvent(event)
         }
     }
 
-    private fun handleScrollEvent() {
+    private fun handleScrollEvent(event: AccessibilityEvent) {
         val currentTime = System.currentTimeMillis()
         
+        // 0. Direction & Orientation Check
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            val deltaY = event.scrollDeltaY
+            val deltaX = event.scrollDeltaX
+            
+            Log.v(TAG, "Scroll Event - DeltaY: $deltaY, DeltaX: $deltaX")
+
+            // Filter 1: Ignore horizontal scrolls (like swiping between tabs/stories)
+            if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX != 0) {
+                return
+            }
+
+            // Filter 2: Ignore significant upward scrolls.
+            // We use < -1 because some apps (Firefox, Substack) report -1 for downward scrolls.
+            // This ensures we don't block valid scrolls in those apps while still filtering
+            // out clear "back to top" movements in standard apps.
+            if (deltaY < -1) {
+                Log.d(TAG, "Ignoring upward scroll (DeltaY: $deltaY)")
+                return
+            }
+        }
+
         // 1. Idle Reset: Check gap since the LAST SEEN event (any event)
         if (lastSeenEventTime != 0L) {
             val idleGap = currentTime - lastSeenEventTime
