@@ -25,7 +25,7 @@ class IdleScrollAccessibilityService : AccessibilityService() {
             isEnabled = sharedPreferences.getBoolean(key, false)
             Log.d(TAG, "Detector enabled state changed: $isEnabled")
             if (!isEnabled) {
-                scrollTimestamps.clear()
+                resetDetectionState()
             }
         }
     }
@@ -41,19 +41,18 @@ class IdleScrollAccessibilityService : AccessibilityService() {
     }
 
     // Detection parameters
-    private val WINDOW_MS = 30_000L // 30 seconds sliding window
-    private val SCROLL_COUNT_THRESHOLD = 20 // ~20 scrolls in 30 seconds
-    private val IDLE_RESET_MS = 5_000L // Reset if user stops for 5 seconds
-    private val MIN_TIME_BETWEEN_COUNTS_MS = 150L // Ignore duplicate events from the same scroll
+    private val WINDOW_MS = 300_000L // 5 minute sliding window
+    private val SCROLL_COUNT_THRESHOLD = 120 // Total scrolls needed in 5 mins
+    private val IDLE_RESET_MS = 15_000L // Reset if user stops for 15 seconds
+    private val MIN_EVENT_GAP_MS = 300L // Debounce: 300ms sweet spot to ignore holds
     
     private val scrollTimestamps = LinkedList<Long>()
     private var lastSeenEventTime = 0L
-    private var lastCountedEventTime = 0L
+    private var lastProcessedEventTime = 0L
     private var lastOverlayTime = 0L
-    private val OVERLAY_COOLDOWN_MS = 60_000L // Don't show overlay more than once per minute
+    private val OVERLAY_COOLDOWN_MS = 60_000L 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Refresh state in case it was changed while service was running
         isEnabled = prefs.getBoolean("detector_enabled", false)
         return START_STICKY
     }
@@ -68,67 +67,60 @@ class IdleScrollAccessibilityService : AccessibilityService() {
 
     private fun handleScrollEvent(event: AccessibilityEvent) {
         val currentTime = System.currentTimeMillis()
+        val packageName = event.packageName?.toString() ?: "unknown"
         
-        // 0. Direction & Orientation Check
+        // 1. Idle Reset: Check gap since the LAST SEEN event
+        if (lastSeenEventTime != 0L) {
+            val idleGap = currentTime - lastSeenEventTime
+            if (idleGap > IDLE_RESET_MS) {
+                Log.d(TAG, "Idle reset: Gap of ${idleGap/1000}s. Resetting state.")
+                resetDetectionState()
+            }
+        }
+        lastSeenEventTime = currentTime
+
+        // 2. Debounce Check: Prevent point-spamming from finger holds
+        val timeSinceLastProcessed = currentTime - lastProcessedEventTime
+        if (timeSinceLastProcessed < MIN_EVENT_GAP_MS) {
+            return 
+        }
+
+        // 3. Movement Filtering
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
             val deltaY = event.scrollDeltaY
             val deltaX = event.scrollDeltaX
             
-            Log.v(TAG, "Scroll Event - DeltaY: $deltaY, DeltaX: $deltaX")
+            // Ignore horizontal swipes
+            if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX != 0) return
 
-            // Filter 1: Ignore horizontal scrolls (like swiping between tabs/stories)
-            if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX != 0) {
-                return
-            }
-
-            // Filter 2: Ignore significant upward scrolls.
-            // We use < -1 because some apps (Firefox, Substack) report -1 for downward scrolls.
-            // This ensures we don't block valid scrolls in those apps while still filtering
-            // out clear "back to top" movements in standard apps.
-            if (deltaY < -1) {
-                Log.d(TAG, "Ignoring upward scroll (DeltaY: $deltaY)")
-                return
-            }
+            // Ignore significant upward scrolls
+            if (deltaY < -1) return
         }
 
-        // 1. Idle Reset: Check gap since the LAST SEEN event (any event)
-        if (lastSeenEventTime != 0L) {
-            val idleGap = currentTime - lastSeenEventTime
-            if (idleGap > IDLE_RESET_MS) {
-                Log.d(TAG, "Idle reset: Gap of ${idleGap/1000}s detected. Resetting points.")
-                scrollTimestamps.clear()
-            }
-        }
-        lastSeenEventTime = currentTime
-        
-        // 2. Debounce: Only count a point if it's been 150ms since the LAST COUNTED event
-        // This ensures continuous scrolling actually increments the counter.
-        val timeSinceLastCount = currentTime - lastCountedEventTime
-        if (timeSinceLastCount < MIN_TIME_BETWEEN_COUNTS_MS) {
-            return
-        }
-        lastCountedEventTime = currentTime
-        
-        // 3. Add current scroll timestamp
+        // 4. Uniform Point Allocation
+        lastProcessedEventTime = currentTime
         scrollTimestamps.add(currentTime)
         
-        // 4. Sliding Window: Remove timestamps older than 30s
+        Log.d(TAG, "App: $packageName | Point added! Window: ${scrollTimestamps.size}")
+        
+        // 5. Sliding Window Cleanup
         while (scrollTimestamps.isNotEmpty() && (currentTime - (scrollTimestamps.peekFirst() ?: 0L)) > WINDOW_MS) {
             scrollTimestamps.removeFirst()
         }
 
-        // LOG FOR MONITORING
-        Log.d(TAG, "Points: ${scrollTimestamps.size} / $SCROLL_COUNT_THRESHOLD | Added point (gap: ${timeSinceLastCount}ms)")
-
-        // 5. Classification
+        // 6. Threshold Check
         if (scrollTimestamps.size >= SCROLL_COUNT_THRESHOLD) {
             if (currentTime - lastOverlayTime > OVERLAY_COOLDOWN_MS) {
-                Log.w(TAG, "!!! IDLE SCROLL DETECTED !!! Showing Overlay.")
+                Log.w(TAG, "!!! TRIGGER !!! ${scrollTimestamps.size} scrolls in 5 mins")
                 showWarningOverlay()
                 lastOverlayTime = currentTime
-                scrollTimestamps.clear()
+                resetDetectionState()
             }
         }
+    }
+
+    private fun resetDetectionState() {
+        scrollTimestamps.clear()
     }
 
     private fun showWarningOverlay() {
