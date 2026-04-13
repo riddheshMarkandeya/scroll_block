@@ -42,7 +42,7 @@ class IdleScrollAccessibilityService : AccessibilityService() {
 
     // Detection parameters
     private val WINDOW_MS = 300_000L // 5 minute sliding window
-    private val SCROLL_COUNT_THRESHOLD = 120 // Total scrolls needed in 5 mins
+    private val SCROLL_COUNT_THRESHOLD = 80 // Total scrolls needed in 5 mins
     private val IDLE_RESET_MS = 15_000L // Reset if user stops for 15 seconds
     private val MIN_EVENT_GAP_MS = 300L // Debounce: 300ms sweet spot to ignore holds
     
