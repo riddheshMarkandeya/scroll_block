@@ -5,26 +5,33 @@
 ## 🚀 Features
 
 - **Background Detection**: Uses an Android `AccessibilityService` to monitor scrolling across all apps (Instagram, LinkedIn, Firefox, etc.) without requiring the app to be in the foreground.
+- **Advanced Customization**: 
+    - **Dynamic Detection Window**: Adjust how far back to monitor activity (1–30 min).
+    - **Scroll Threshold**: Fine-tune the number of scrolls allowed before the block triggers.
+    - **Inactivity Reset**: Set how long you need to stop scrolling before your progress is cleared.
+    - **Scroll Sensitivity**: Calibrate the minimum gap between movements to count as a unique scroll.
+    - **Block Duration**: Customize the mandatory wait time on the warning overlay.
 - **Smart Detection Logic**: 
-    - **5-Minute Sliding Window**: Tracks scroll activity over a rolling 5-minute period to catch long-term "trance" states.
-    - **Uniform Point System**: Every distinct scroll action counts as 1 point, ensuring consistent detection across different apps.
-    - **Anti-Fidget Debounce**: Implements a 300ms debounce to ignore accidental finger holds, tremors, or slow drags.
-    - **Idle Reset**: Automatically clears your scroll history if you take a meaningful break (15+ seconds).
+    - **Sliding Window**: Tracks scroll activity over a rolling period to catch "trance" states.
+    - **Anti-Fidget Debounce**: Ignores accidental finger holds, tremors, or slow drags.
+    - **Idle Reset**: Automatically clears your scroll history if you take a meaningful break.
 - **High-Urgency Overlay**:
-    - Interrupts your scroll with a full-screen red warning modal.
-    - **Mandatory 3s Countdown**: Forces a 3-second pause before the "Got it" button becomes active.
-    - **Playful/Interrogative Tone**: Asks "Hey, are you paying attention?" to nudge you out of autopilot.
-- **Directional Filtering**: Intelligently ignores upward scrolls (returning to top) and horizontal swipes (switching tabs/stories) to reduce false positives.
-- **Material 3 UI**: Clean, modern dashboard to manage permissions and toggle the detector state.
-- **Persistence**: The service is designed to survive task removal (swiping the app away from recents).
+    - Interrupts your scroll with a full-screen warning modal.
+    - **Mandatory Countdown**: Forces a pause before the "Got it" button becomes active.
+- **Directional Filtering**: Intelligently ignores upward scrolls (returning to top) and horizontal swipes to reduce false positives.
+- **Modern Material 3 UI**: 
+    - Clean dashboard with an expandable **Advanced Options** section.
+    - Smooth animations and scrollable interface for all screen sizes.
+    - Quick "Reset to Defaults" functionality.
 
-## 🛠 How It Works
+## 🛠 Default Metrics
 
-The app uses several specific metrics and constraints to differentiate between "reading" and "mindless scrolling":
-- **Window**: 300,000ms (5 Minutes)
-- **Threshold**: 120 points (Approx. 24 scrolls per minute)
-- **Debounce**: 300ms (Only 1 point allowed per 300ms period)
-- **Idle Reset**: 15,000ms (15 seconds of inactivity resets the counter)
+The app comes pre-configured with these recommended settings:
+- **Window**: 5 Minutes
+- **Threshold**: 80 scrolls
+- **Inactivity Reset**: 15 seconds
+- **Scroll Sensitivity**: 300ms
+- **Block Duration**: 3 seconds
 
 ## 🛡 Permissions Required
 
@@ -34,16 +41,17 @@ The app uses several specific metrics and constraints to differentiate between "
 ## 📱 Installation & Setup
 
 1. Open the app and grant the **Display over other apps** permission.
-2. Enable the **Scroll Block Accessibility Service** in your device's Accessibility settings.
+2. Enable the **Scroll Block Accessibility Service** in device settings.
 3. Toggle the detector to **Enabled** on the main dashboard.
-4. Go about your day! If you start doom-scrolling, we'll let you know.
+4. (Optional) Expand **Advanced Options** to customize the detection sensitivity to your liking.
 
 ## 🛠 Technical Details
 
 - **Language**: Kotlin
 - **UI Framework**: Jetpack Compose (Material 3)
 - **Service**: `AccessibilityService`
-- **Storage**: `SharedPreferences` for persistent state management.
+- **Iconography**: Material Icons Extended
+- **Storage**: `SharedPreferences` with real-time service synchronization.
 
 ---
 *Built to help you stay present.*
