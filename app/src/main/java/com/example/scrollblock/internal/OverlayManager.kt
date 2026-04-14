@@ -44,6 +44,9 @@ class OverlayManager(private val context: Context) {
     fun show() {
         if (isVisible) return
 
+        val prefs = context.getSharedPreferences("scroll_block_prefs", Context.MODE_PRIVATE)
+        val overlayTime = prefs.getInt("pref_overlay_time_s", 3)
+
         canDismiss = false
         val dismissButton = overlayView.findViewById<Button>(R.id.dismissButton)
         val timerText = overlayView.findViewById<TextView>(R.id.timerText)
@@ -52,7 +55,7 @@ class OverlayManager(private val context: Context) {
         dismissButton?.alpha = 0.5f
         timerText?.visibility = View.VISIBLE
         
-        var secondsLeft = 3
+        var secondsLeft = overlayTime
         
         val timerRunnable = object : Runnable {
             override fun run() {

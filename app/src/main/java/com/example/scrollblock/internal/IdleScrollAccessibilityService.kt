@@ -14,37 +14,11 @@ class IdleScrollAccessibilityService : AccessibilityService() {
     private val TAG = "ScrollBlockDetector"
     private lateinit var prefs: SharedPreferences
     
-    override fun onCreate() {
-        super.onCreate()
-        prefs = getSharedPreferences("scroll_block_prefs", Context.MODE_PRIVATE)
-        isEnabled = prefs.getBoolean("detector_enabled", false)
-    }
-
-    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
-        if (key == "detector_enabled") {
-            isEnabled = sharedPreferences.getBoolean(key, false)
-            Log.d(TAG, "Detector enabled state changed: $isEnabled")
-            if (!isEnabled) {
-                resetDetectionState()
-            }
-        }
-    }
-
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        prefs.registerOnSharedPreferenceChangeListener(prefListener)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
-    }
-
     // Detection parameters
-    private val WINDOW_MS = 300_000L // 5 minute sliding window
-    private val SCROLL_COUNT_THRESHOLD = 80 // Total scrolls needed in 5 mins
-    private val IDLE_RESET_MS = 15_000L // Reset if user stops for 15 seconds
-    private val MIN_EVENT_GAP_MS = 300L // Debounce: 300ms sweet spot to ignore holds
+    private var windowMs = 300_000L 
+    private var scrollThreshold = 80 
+    private var idleResetMs = 15_000L 
+    private var minEventGapMs = 300L 
     
     private val scrollTimestamps = LinkedList<Long>()
     private var lastSeenEventTime = 0L
@@ -52,8 +26,49 @@ class IdleScrollAccessibilityService : AccessibilityService() {
     private var lastOverlayTime = 0L
     private val OVERLAY_COOLDOWN_MS = 60_000L 
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+        when (key) {
+            "detector_enabled" -> {
+                isEnabled = sharedPreferences.getBoolean(key, false)
+                Log.d(TAG, "Detector enabled state changed: $isEnabled")
+                if (!isEnabled) {
+                    resetDetectionState()
+                }
+            }
+            "pref_window_ms", "pref_threshold", "pref_idle_reset_ms", "pref_debounce_ms" -> {
+                loadPreferences()
+            }
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        prefs = getSharedPreferences("scroll_block_prefs", Context.MODE_PRIVATE)
+        loadPreferences()
+    }
+
+    private fun loadPreferences() {
         isEnabled = prefs.getBoolean("detector_enabled", false)
+        windowMs = prefs.getLong("pref_window_ms", 300_000L)
+        scrollThreshold = prefs.getInt("pref_threshold", 80)
+        idleResetMs = prefs.getLong("pref_idle_reset_ms", 15_000L)
+        minEventGapMs = prefs.getLong("pref_debounce_ms", 300L)
+        Log.d(TAG, "Preferences loaded: threshold=$scrollThreshold, window=${windowMs}ms, idleReset=${idleResetMs}ms, debounce=${minEventGapMs}ms")
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
+        loadPreferences()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        loadPreferences()
         return START_STICKY
     }
 
@@ -72,7 +87,7 @@ class IdleScrollAccessibilityService : AccessibilityService() {
         // 1. Idle Reset: Check gap since the LAST SEEN event
         if (lastSeenEventTime != 0L) {
             val idleGap = currentTime - lastSeenEventTime
-            if (idleGap > IDLE_RESET_MS) {
+            if (idleGap > idleResetMs) {
                 Log.d(TAG, "Idle reset: Gap of ${idleGap/1000}s. Resetting state.")
                 resetDetectionState()
             }
@@ -81,7 +96,7 @@ class IdleScrollAccessibilityService : AccessibilityService() {
 
         // 2. Debounce Check: Prevent point-spamming from finger holds
         val timeSinceLastProcessed = currentTime - lastProcessedEventTime
-        if (timeSinceLastProcessed < MIN_EVENT_GAP_MS) {
+        if (timeSinceLastProcessed < minEventGapMs) {
             return 
         }
 
@@ -104,14 +119,14 @@ class IdleScrollAccessibilityService : AccessibilityService() {
         Log.d(TAG, "App: $packageName | Point added! Window: ${scrollTimestamps.size}")
         
         // 5. Sliding Window Cleanup
-        while (scrollTimestamps.isNotEmpty() && (currentTime - (scrollTimestamps.peekFirst() ?: 0L)) > WINDOW_MS) {
+        while (scrollTimestamps.isNotEmpty() && (currentTime - (scrollTimestamps.peekFirst() ?: 0L)) > windowMs) {
             scrollTimestamps.removeFirst()
         }
 
         // 6. Threshold Check
-        if (scrollTimestamps.size >= SCROLL_COUNT_THRESHOLD) {
+        if (scrollTimestamps.size >= scrollThreshold) {
             if (currentTime - lastOverlayTime > OVERLAY_COOLDOWN_MS) {
-                Log.w(TAG, "!!! TRIGGER !!! ${scrollTimestamps.size} scrolls in 5 mins")
+                Log.w(TAG, "!!! TRIGGER !!! ${scrollTimestamps.size} scrolls in ${windowMs/1000}s")
                 showWarningOverlay()
                 lastOverlayTime = currentTime
                 resetDetectionState()
